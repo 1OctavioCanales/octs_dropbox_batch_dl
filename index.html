@@ -140,7 +140,7 @@
 
 <script>
   const MAX_LINKS = 20;
-  const GAP_MS = 800;
+  const GAP_MS = 1200;
 
   const goBtn = document.getElementById('go');
   const logEl = document.getElementById('log');
@@ -211,14 +211,18 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  function triggerDownload(url, name) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  // Use an isolated hidden iframe per file. Iframes don't cancel each other
+  // the way rapid link-clicks do, and cross-origin Dropbox URLs (dl=1)
+  // respond with the file, so the browser downloads instead of navigating.
+  function triggerDownload(url) {
+    const frame = document.createElement('iframe');
+    frame.style.display = 'none';
+    frame.src = url;
+    document.body.appendChild(frame);
+    // Clean up the frame after the request has had time to kick off
+    setTimeout(() => {
+      if (frame.parentNode) frame.parentNode.removeChild(frame);
+    }, 60000);
   }
 
   async function run() {
@@ -235,7 +239,7 @@
       li.innerHTML = `<span class="fname">${String(i+1).padStart(2,'0')}. ${name}</span><span class="status-go">starting...</span>`;
       logEl.appendChild(li);
 
-      triggerDownload(links[i], name);
+      triggerDownload(links[i]);
 
       li.querySelector('span:last-child').textContent = 'sent \u2713';
       li.querySelector('span:last-child').className = 'status-ok';
