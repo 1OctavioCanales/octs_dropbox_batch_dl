@@ -171,27 +171,40 @@
     countEl.classList.toggle('over', n > MAX_LINKS);
   }
 
-  // Trim pasted/typed content down to 20 links max.
-  // Guarded so the alert only fires once even if input + paste both trigger it.
-  let trimming = false;
+  // Count links without modifying anything
+  function linkCount() {
+    return linksEl.value.split('\n').filter(l => l.trim()).length;
+  }
+
+  let alertShown = false;
+  // Trim to MAX_LINKS. Runs after paste has fully settled (deferred).
   function enforceLimit() {
-    const nonEmpty = linksEl.value.split('\n').filter(l => l.trim());
+    const nonEmpty = linksEl.value.split('\n').map(l => l.trim()).filter(Boolean);
     if (nonEmpty.length > MAX_LINKS) {
       const kept = nonEmpty.slice(0, MAX_LINKS);
       linksEl.value = kept.join('\n');
-      if (!trimming) {
-        trimming = true;
+      updateCount();
+      updateGutter();
+      if (!alertShown) {
+        alertShown = true;
         alert('Link limit exceeded. Trimming links above 20.');
-        trimming = false;
+        // reset the flag after the alert so future over-pastes still warn
+        setTimeout(() => { alertShown = false; }, 300);
       }
+    } else {
+      updateCount();
+      updateGutter();
     }
-    updateCount();
-    updateGutter();
   }
 
+  // Defer to next tick so the browser finishes applying the paste before we trim
   linksEl.addEventListener('input', () => {
-    enforceLimit();
-    linksEl.scrollLeft = 0;
+    updateCount();
+    updateGutter();
+    setTimeout(() => {
+      enforceLimit();
+      linksEl.scrollLeft = 0;
+    }, 0);
   });
 
   function toDirect(url) {
