@@ -140,7 +140,7 @@
 
 <script>
   const MAX_LINKS = 20;
-  const GAP_MS = 1200;
+  const GAP_MS = 1500;
 
   const goBtn = document.getElementById('go');
   const logEl = document.getElementById('log');
@@ -191,29 +191,14 @@
   }
 
   linksEl.addEventListener('input', enforceLimit);
-  linksEl.addEventListener('paste', () => setTimeout(() => {
-    enforceLimit();
-    linksEl.scrollLeft = 0;
-    gutterEl.scrollTop = linksEl.scrollTop;
-  }, 0));
+  linksEl.addEventListener('paste', () => setTimeout(enforceLimit, 0));
 
   function toDirect(url) {
     url = url.trim();
     if (!url) return null;
-    // Rewrite the host to dl.dropboxusercontent.com, which serves the file
-    // directly with no redirect. The redirect on www.dropbox.com/...?dl=1 is
-    // what causes concurrent downloads to cancel each other.
-    try {
-      const u = new URL(url);
-      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com') {
-        u.hostname = 'dl.dropboxusercontent.com';
-      }
-      // dl param no longer needed on the direct host; strip it to keep things clean
-      u.searchParams.delete('dl');
-      return u.toString();
-    } catch {
-      return url;
-    }
+    if (url.includes('dl=0')) return url.replace('dl=0', 'dl=1');
+    if (!url.includes('dl=1')) return url + (url.includes('?') ? '&' : '?') + 'dl=1';
+    return url;
   }
 
   function fileName(url) {
@@ -226,22 +211,14 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  // Fetch the file data into the page, then save it as a blob. Because the blob
-  // is same-origin data, the browser reliably downloads it (with the filename)
-  // instead of previewing or cancelling. Downloads happen strictly in order.
-  async function triggerDownload(url, name) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
+  function triggerDownload(url, name) {
     const a = document.createElement('a');
-    a.href = blobUrl;
+    a.href = url;
     a.download = name;
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
   }
 
   async function run() {
@@ -255,18 +232,13 @@
     for (let i = 0; i < links.length; i++) {
       const name = fileName(links[i]);
       const li = document.createElement('li');
-      li.innerHTML = `<span class="fname">${String(i+1).padStart(2,'0')}. ${name}</span><span class="status-go">downloading...</span>`;
+      li.innerHTML = `<span class="fname">${String(i+1).padStart(2,'0')}. ${name}</span><span class="status-go">starting...</span>`;
       logEl.appendChild(li);
-      const statusEl = li.querySelector('span:last-child');
 
-      try {
-        await triggerDownload(links[i], name);
-        statusEl.textContent = 'done \u2713';
-        statusEl.className = 'status-ok';
-      } catch (e) {
-        statusEl.textContent = 'failed';
-        statusEl.className = 'status-fail';
-      }
+      triggerDownload(links[i], name);
+
+      li.querySelector('span:last-child').textContent = 'sent \u2713';
+      li.querySelector('span:last-child').className = 'status-ok';
 
       if (i < links.length - 1) await sleep(GAP_MS);
     }
