@@ -120,6 +120,7 @@
     <ol class="steps">
       <li>Paste 1 - 20 Links</li>
       <li>Hit "Download All"</li>
+      <li>Accept "Multiple Downloads" Permission</li>
       <li>It downloads to your download folder</li>
       <li>(:</li>
     </ol>
@@ -218,7 +219,12 @@
     const a = document.createElement('a');
     a.href = url;
     a.download = name;
-    a.style.display = 'none';
+    a.style.position = 'absolute';
+    a.style.left = '-9999px';
+    a.style.top = '0';
+    a.style.width = '1px';
+    a.style.height = '1px';
+    a.style.opacity = '0';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -231,6 +237,7 @@
 
     logEl.innerHTML = '';
     goBtn.disabled = true;
+    linksEl.scrollLeft = 0;
 
     for (let i = 0; i < links.length; i++) {
       const name = fileName(links[i]);
