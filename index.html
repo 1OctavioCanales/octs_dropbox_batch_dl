@@ -191,7 +191,10 @@
   }
 
   linksEl.addEventListener('input', enforceLimit);
-  linksEl.addEventListener('paste', () => setTimeout(enforceLimit, 0));
+  linksEl.addEventListener('paste', () => setTimeout(() => {
+    enforceLimit();
+    linksEl.scrollLeft = 0;
+  }, 0));
 
   function toDirect(url) {
     url = url.trim();
