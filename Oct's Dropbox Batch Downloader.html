@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Octavio's Dropbox Batch Link Downloader</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #262b36;
+    --text: #e6e8ec;
+    --muted: #8b93a1;
+    --accent: #0061fe;
+    --accent-hover: #1a75ff;
+    --ok: #29c46f;
+    --fail: #ff5c5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .wrap { width: 100%; max-width: 640px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p.note { color: var(--text); margin: 0 0 16px; font-size: 14px; font-weight: 600; }
+  ol.steps { color: var(--muted); margin: 0 0 24px; padding-left: 20px; font-size: 14px; line-height: 1.7; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+
+  /* Shared type metrics so gutter numbers align with textarea lines */
+  .editor {
+    --edit-font: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --edit-size: 13px;
+    --edit-line: 1.5;
+    --edit-pad-y: 12px;
+    display: flex;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .editor:focus-within { border-color: var(--accent); }
+
+  .gutter {
+    flex: 0 0 auto;
+    padding: var(--edit-pad-y) 10px var(--edit-pad-y) 14px;
+    margin: 0;
+    text-align: right;
+    color: var(--muted);
+    background: rgba(0,0,0,0.18);
+    font-family: var(--edit-font);
+    font-size: var(--edit-size);
+    line-height: var(--edit-line);
+    overflow: hidden;
+    white-space: pre;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    pointer-events: none;
+  }
+
+  .editor textarea {
+    flex: 1 1 auto;
+    min-height: 200px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    padding: var(--edit-pad-y) 14px;
+    font-family: var(--edit-font);
+    font-size: var(--edit-size);
+    line-height: var(--edit-line);
+    resize: vertical;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .editor textarea:focus { outline: none; }
+  .row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+  .count { color: var(--muted); font-size: 13px; }
+  .count.over { color: var(--fail); font-weight: 600; }
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  ul.log { list-style: none; padding: 0; margin: 24px 0 0; }
+  ul.log li {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    background: var(--panel);
+  }
+  .status-ok { color: var(--ok); }
+  .status-go { color: var(--accent); }
+  .fname { font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 12px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Octavio's Dropbox Batch Link Downloader</h1>
+    <p class="note">Links download in the order they are pasted</p>
+    <ol class="steps">
+      <li>Paste 1 - 20 Links</li>
+      <li>Hit "Download All"</li>
+      <li>It downloads to your download folder</li>
+      <li>(:</li>
+    </ol>
+
+    <label for="links">Links</label>
+    <div class="editor">
+      <pre class="gutter" id="gutter" aria-hidden="true">1</pre>
+      <textarea id="links" wrap="off" placeholder="https://www.dropbox.com/.../file1.mp3?dl=0&#10;https://www.dropbox.com/.../file2.mp3?dl=0"></textarea>
+    </div>
+
+    <div class="row">
+      <button id="go">Download All</button>
+      <span class="count" id="count">0 / 20 links</span>
+    </div>
+
+    <ul class="log" id="log"></ul>
+  </div>
+
+<script>
+  const MAX_LINKS = 20;
+  const GAP_MS = 800;
+
+  const goBtn = document.getElementById('go');
+  const logEl = document.getElementById('log');
+  const linksEl = document.getElementById('links');
+  const countEl = document.getElementById('count');
+  const gutterEl = document.getElementById('gutter');
+
+  // Render one number per line in the textarea, synced to its content
+  function updateGutter() {
+    const lineCount = linksEl.value.split('\n').length;
+    let out = '';
+    for (let i = 1; i <= lineCount; i++) {
+      out += i + (i < lineCount ? '\n' : '');
+    }
+    gutterEl.textContent = out;
+    gutterEl.scrollTop = linksEl.scrollTop;
+  }
+
+  linksEl.addEventListener('scroll', () => { gutterEl.scrollTop = linksEl.scrollTop; });
+
+  function currentLinks() {
+    return linksEl.value.split('\n').map(l => l.trim()).filter(Boolean);
+  }
+
+  function updateCount() {
+    const n = currentLinks().length;
+    countEl.textContent = `${n} / ${MAX_LINKS} links`;
+    countEl.classList.toggle('over', n > MAX_LINKS);
+  }
+
+  // Trim pasted/typed content down to 20 links max
+  function enforceLimit() {
+    const lines = linksEl.value.split('\n');
+    const nonEmpty = lines.filter(l => l.trim());
+    if (nonEmpty.length > MAX_LINKS) {
+      const kept = [];
+      for (const line of lines) {
+        if (line.trim()) {
+          if (kept.filter(l => l.trim()).length >= MAX_LINKS) continue;
+        }
+        kept.push(line);
+      }
+      linksEl.value = kept.join('\n');
+      alert('Link limit exceeded. Trimming links above 20.');
+    }
+    updateCount();
+    updateGutter();
+  }
+
+  linksEl.addEventListener('input', enforceLimit);
+  linksEl.addEventListener('paste', () => setTimeout(enforceLimit, 0));
+
+  function toDirect(url) {
+    url = url.trim();
+    if (!url) return null;
+    if (url.includes('dl=0')) return url.replace('dl=0', 'dl=1');
+    if (!url.includes('dl=1')) return url + (url.includes('?') ? '&' : '?') + 'dl=1';
+    return url;
+  }
+
+  function fileName(url) {
+    try {
+      const path = new URL(url).pathname;
+      const name = path.split('/').filter(Boolean).pop();
+      return decodeURIComponent(name || 'download');
+    } catch { return 'download'; }
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function triggerDownload(url, name) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function run() {
+    const links = currentLinks().map(toDirect).filter(Boolean);
+
+    if (!links.length) { alert('Paste at least one link first.'); return; }
+
+    logEl.innerHTML = '';
+    goBtn.disabled = true;
+
+    for (let i = 0; i < links.length; i++) {
+      const name = fileName(links[i]);
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="fname">${String(i+1).padStart(2,'0')}. ${name}</span><span class="status-go">starting...</span>`;
+      logEl.appendChild(li);
+
+      triggerDownload(links[i], name);
+
+      li.querySelector('span:last-child').textContent = 'sent \u2713';
+      li.querySelector('span:last-child').className = 'status-ok';
+
+      if (i < links.length - 1) await sleep(GAP_MS);
+    }
+
+    goBtn.disabled = false;
+  }
+
+  goBtn.addEventListener('click', run);
+  updateCount();
+  updateGutter();
+</script>
+</body>
+</html>
