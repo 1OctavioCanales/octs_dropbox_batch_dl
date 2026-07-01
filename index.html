@@ -196,9 +196,20 @@
   function toDirect(url) {
     url = url.trim();
     if (!url) return null;
-    if (url.includes('dl=0')) return url.replace('dl=0', 'dl=1');
-    if (!url.includes('dl=1')) return url + (url.includes('?') ? '&' : '?') + 'dl=1';
-    return url;
+    // Rewrite the host to dl.dropboxusercontent.com, which serves the file
+    // directly with no redirect. The redirect on www.dropbox.com/...?dl=1 is
+    // what causes concurrent downloads to cancel each other.
+    try {
+      const u = new URL(url);
+      if (u.hostname === 'www.dropbox.com' || u.hostname === 'dropbox.com') {
+        u.hostname = 'dl.dropboxusercontent.com';
+      }
+      // dl param no longer needed on the direct host; strip it to keep things clean
+      u.searchParams.delete('dl');
+      return u.toString();
+    } catch {
+      return url;
+    }
   }
 
   function fileName(url) {
@@ -211,18 +222,19 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  // Use an isolated hidden iframe per file. Iframes don't cancel each other
-  // the way rapid link-clicks do, and cross-origin Dropbox URLs (dl=1)
-  // respond with the file, so the browser downloads instead of navigating.
-  function triggerDownload(url) {
-    const frame = document.createElement('iframe');
-    frame.style.display = 'none';
-    frame.src = url;
-    document.body.appendChild(frame);
-    // Clean up the frame after the request has had time to kick off
-    setTimeout(() => {
-      if (frame.parentNode) frame.parentNode.removeChild(frame);
-    }, 60000);
+  // With the direct dl.dropboxusercontent.com host there's no redirect, so a
+  // plain anchor click works reliably. Each click opens in its own frame via
+  // target to avoid navigating the main page.
+  function triggerDownload(url, name) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
   }
 
   async function run() {
@@ -239,7 +251,7 @@
       li.innerHTML = `<span class="fname">${String(i+1).padStart(2,'0')}. ${name}</span><span class="status-go">starting...</span>`;
       logEl.appendChild(li);
 
-      triggerDownload(links[i]);
+      triggerDownload(links[i], name);
 
       li.querySelector('span:last-child').textContent = 'sent \u2713';
       li.querySelector('span:last-child').className = 'status-ok';
