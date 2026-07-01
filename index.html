@@ -171,25 +171,28 @@
     countEl.classList.toggle('over', n > MAX_LINKS);
   }
 
-  // Trim pasted/typed content down to 20 links max
+  // Trim pasted/typed content down to 20 links max.
+  // Guarded so the alert only fires once even if input + paste both trigger it.
+  let trimming = false;
   function enforceLimit() {
-    const lines = linksEl.value.split('\n');
-    const nonEmpty = lines.filter(l => l.trim());
+    const nonEmpty = linksEl.value.split('\n').filter(l => l.trim());
     if (nonEmpty.length > MAX_LINKS) {
-      // Keep exactly the first MAX_LINKS non-empty links, discard the rest
       const kept = nonEmpty.slice(0, MAX_LINKS);
       linksEl.value = kept.join('\n');
-      alert('Link limit exceeded. Trimming links above 20.');
+      if (!trimming) {
+        trimming = true;
+        alert('Link limit exceeded. Trimming links above 20.');
+        trimming = false;
+      }
     }
     updateCount();
     updateGutter();
   }
 
-  linksEl.addEventListener('input', enforceLimit);
-  linksEl.addEventListener('paste', () => setTimeout(() => {
+  linksEl.addEventListener('input', () => {
     enforceLimit();
     linksEl.scrollLeft = 0;
-  }, 0));
+  });
 
   function toDirect(url) {
     url = url.trim();
