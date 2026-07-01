@@ -191,7 +191,11 @@
   }
 
   linksEl.addEventListener('input', enforceLimit);
-  linksEl.addEventListener('paste', () => setTimeout(enforceLimit, 0));
+  linksEl.addEventListener('paste', () => setTimeout(() => {
+    enforceLimit();
+    linksEl.scrollLeft = 0;
+    gutterEl.scrollTop = linksEl.scrollTop;
+  }, 0));
 
   function toDirect(url) {
     url = url.trim();
@@ -222,19 +226,22 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  // With the direct dl.dropboxusercontent.com host there's no redirect, so a
-  // plain anchor click works reliably. Each click opens in its own frame via
-  // target to avoid navigating the main page.
-  function triggerDownload(url, name) {
+  // Fetch the file data into the page, then save it as a blob. Because the blob
+  // is same-origin data, the browser reliably downloads it (with the filename)
+  // instead of previewing or cancelling. Downloads happen strictly in order.
+  async function triggerDownload(url, name) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = blobUrl;
     a.download = name;
-    a.target = '_blank';
-    a.rel = 'noopener';
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => { if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
   }
 
   async function run() {
@@ -248,13 +255,18 @@
     for (let i = 0; i < links.length; i++) {
       const name = fileName(links[i]);
       const li = document.createElement('li');
-      li.innerHTML = `<span class="fname">${String(i+1).padStart(2,'0')}. ${name}</span><span class="status-go">starting...</span>`;
+      li.innerHTML = `<span class="fname">${String(i+1).padStart(2,'0')}. ${name}</span><span class="status-go">downloading...</span>`;
       logEl.appendChild(li);
+      const statusEl = li.querySelector('span:last-child');
 
-      triggerDownload(links[i], name);
-
-      li.querySelector('span:last-child').textContent = 'sent \u2713';
-      li.querySelector('span:last-child').className = 'status-ok';
+      try {
+        await triggerDownload(links[i], name);
+        statusEl.textContent = 'done \u2713';
+        statusEl.className = 'status-ok';
+      } catch (e) {
+        statusEl.textContent = 'failed';
+        statusEl.className = 'status-fail';
+      }
 
       if (i < links.length - 1) await sleep(GAP_MS);
     }
