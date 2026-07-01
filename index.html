@@ -120,7 +120,6 @@
     <ol class="steps">
       <li>Paste 1 - 20 Links</li>
       <li>Hit "Download All"</li>
-      <li>Accept "Multiple Downloads" Permission</li>
       <li>It downloads to your download folder</li>
       <li>(:</li>
     </ol>
@@ -177,13 +176,8 @@
     const lines = linksEl.value.split('\n');
     const nonEmpty = lines.filter(l => l.trim());
     if (nonEmpty.length > MAX_LINKS) {
-      const kept = [];
-      for (const line of lines) {
-        if (line.trim()) {
-          if (kept.filter(l => l.trim()).length >= MAX_LINKS) continue;
-        }
-        kept.push(line);
-      }
+      // Keep exactly the first MAX_LINKS non-empty links, discard the rest
+      const kept = nonEmpty.slice(0, MAX_LINKS);
       linksEl.value = kept.join('\n');
       alert('Link limit exceeded. Trimming links above 20.');
     }
