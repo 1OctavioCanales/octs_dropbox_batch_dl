@@ -118,11 +118,7 @@
     <h1>Dropbox Batch Link Downloader</h1>
     <p class="note">Links download in the order they are pasted</p>
     <ol class="steps">
-      <li>Paste 1 - 20 Links</li>
-      <li>Hit "Download All"</li>
-      <li>Accept "Multiple Download" Permission if prompted</li>
-      <li>It downloads to your download folder</li>
-      <li>(First download w/ permission might be buggy)</li>
+      <li style="list-style: none;">Accept "Multiple Download" Permission if prompted</li>
     </ol>
 
     <label for="links">Links</label>
@@ -133,6 +129,7 @@
 
     <div class="row">
       <button id="go">Download All</button>
+      <button id="clear">Clear</button>
       <span class="count" id="count">0 / 20 links</span>
     </div>
 
@@ -148,6 +145,7 @@
   const linksEl = document.getElementById('links');
   const countEl = document.getElementById('count');
   const gutterEl = document.getElementById('gutter');
+  const clearBtn = document.getElementById('clear');
 
   // Render one number per line in the textarea, synced to its content
   function updateGutter() {
@@ -268,6 +266,10 @@
   }
 
   goBtn.addEventListener('click', run);
+  clearBtn.addEventListener('click', () => {
+  linksEl.value = '';
+  enforceLimit();
+});
   updateCount();
   updateGutter();
 </script>
